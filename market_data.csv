@@ -1,2 +1,3 @@
-date,nikkei_225,sp500,gold_usd
-2026-01-14,54341.23,6963.74,4638.7
+date,nikkei_225,sp500,gold_usd,nikkei_change,nikkei_pct,sp500_change,sp500_pct,gold_change,gold_pct
+2026-01-14,54341.23,6963.74,4638.7,,,,,,
+2026-01-14,54341.23,6963.74,4645.6,0.0,0.0,0.0,0.0,6.9,0.15

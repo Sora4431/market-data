@@ -10,33 +10,53 @@ def main():
     # Use last 14 entries just in case CSV has more
     df = df.tail(14)
 
-    # Build indexed series to make lines comparable
-    series_map = {}
-    for col in ['nikkei_225', 'sp500', 'gold_jpy']:
-        if col in df.columns:
-            base = df[col].iloc[0]
-            if base and pd.notna(base) and float(base) != 0:
-                series_map[col] = (df[col] / float(base)) * 100.0
+    # Create 3 separate charts
+    charts = [
+        {
+            'col': 'nikkei_225',
+            'title': 'Nikkei 225 (Last 14 Days)',
+            'ylabel': 'Price (JPY)',
+            'color': '#1f77b4',
+            'filename': 'chart_nikkei.svg'
+        },
+        {
+            'col': 'sp500',
+            'title': 'S&P 500 (Last 14 Days)',
+            'ylabel': 'Index',
+            'color': '#ff7f0e',
+            'filename': 'chart_sp500.svg'
+        },
+        {
+            'col': 'gold_jpy',
+            'title': 'Gold Price in JPY (Last 14 Days)',
+            'ylabel': 'Price (JPY per Troy Ounce)',
+            'color': '#2ca02c',
+            'filename': 'chart_gold.svg'
+        }
+    ]
 
-    # Plot
-    plt.figure(figsize=(9, 4.5))
-    for col, label, color in [
-        ('nikkei_225', 'Nikkei 225 (Indexed)', '#1f77b4'),
-        ('sp500', 'S&P 500 (Indexed)', '#ff7f0e'),
-        ('gold_jpy', 'Gold JPY (Indexed)', '#2ca02c'),
-    ]:
-        if col in series_map:
-            plt.plot(df['date'], series_map[col], label=label, color=color, linewidth=2)
+    for chart in charts:
+        col = chart['col']
+        if col not in df.columns:
+            continue
 
-    plt.title('Market (Last 14 Days) — Indexed to 100')
-    plt.xlabel('Date')
-    plt.ylabel('Index (Base=100)')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
+        plt.figure(figsize=(10, 5))
+        plt.plot(df['date'], df[col], color=chart['color'], linewidth=2, marker='o', markersize=4)
+        plt.title(chart['title'], fontsize=14, fontweight='bold')
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel(chart['ylabel'], fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        # Save to SVG for embedding in GitHub README
+        plt.savefig(chart['filename'], format='svg', bbox_inches='tight')
+        plt.close()
 
-    # Save to SVG for embedding in GitHub README
-    plt.savefig('chart.svg', format='svg')
+    print("3つのグラフを作成しました:")
+    print("- chart_nikkei.svg (日経平均)")
+    print("- chart_sp500.svg (S&P 500)")
+    print("- chart_gold.svg (金価格)")
 
 if __name__ == '__main__':
     main()

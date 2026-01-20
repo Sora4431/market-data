@@ -61,19 +61,18 @@ def fetch_market_data(days: int = 1, refresh: bool = False):
         if 'xau_usd' in df.columns and 'usd_jpy' in df.columns:
             df['gold_jpy'] = (df['xau_usd'] * df['usd_jpy']).round(2)
 
-        # 必要に応じて欠損を前日値で補完（折れ線の連続性のため）
-        if getattr(fetch_market_data, '_ffill', False):
-            full_index = pd.date_range(start=start_date, end=end_date, freq='D').strftime('%Y-%m-%d')
-            df = df.set_index('date').reindex(full_index)
-            df.index.name = 'date'
-            for col in ['nikkei_225', 'sp500', 'gold_jpy']:
-                if col in df.columns:
-                    df[col] = df[col].ffill()
-            # すべての価格が欠損の行は削除（存在する列のみで判定）
-            subset_cols = [c for c in ['nikkei_225', 'sp500', 'gold_jpy'] if c in df.columns]
-            if subset_cols:
-                df = df.dropna(subset=subset_cols, how='all')
-            df = df.reset_index().rename(columns={'index': 'date'})
+        # 欠損を前日値で補完（グラフの線が途切れないように）
+        full_index = pd.date_range(start=start_date, end=end_date, freq='D').strftime('%Y-%m-%d')
+        df = df.set_index('date').reindex(full_index)
+        df.index.name = 'date'
+        for col in ['nikkei_225', 'sp500', 'gold_jpy']:
+            if col in df.columns:
+                df[col] = df[col].ffill()
+        # すべての価格が欠損の行は削除（存在する列のみで判定）
+        subset_cols = [c for c in ['nikkei_225', 'sp500', 'gold_jpy'] if c in df.columns]
+        if subset_cols:
+            df = df.dropna(subset=subset_cols, how='all')
+        df = df.reset_index().rename(columns={'index': 'date'})
 
         # 少数を丸める
         for col in ['nikkei_225', 'sp500', 'gold_jpy']:

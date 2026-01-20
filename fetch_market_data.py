@@ -7,6 +7,14 @@ from datetime import timedelta
 def _round_series(s):
     return s.round(2)
 
+def _last_valid_close(tkr: yf.Ticker, period: str = "7d") -> float:
+    """Return the most recent non-null Close from given period."""
+    hist = tkr.history(period=period)
+    closes = hist['Close'].dropna() if 'Close' in hist else pd.Series(dtype=float)
+    if closes.empty:
+        raise ValueError(f"No close price available in last {period} for {tkr.ticker}")
+    return float(closes.iloc[-1])
+
 def _compute_changes(df, price_col, change_col, pct_col):
     prev = df[price_col].shift(1)
     change = df[price_col] - prev
@@ -105,11 +113,11 @@ def fetch_market_data(days: int = 1, refresh: bool = False):
 
     # 最新1日の終値を取得して追記
     today = datetime.now().strftime('%Y-%m-%d')
-    nikkei_price = nikkei.history(period="1d")['Close'].iloc[-1]
-    sp500_price = sp500.history(period="1d")['Close'].iloc[-1]
+    nikkei_price = _last_valid_close(nikkei, period="7d")
+    sp500_price = _last_valid_close(sp500, period="10d")  # US 3-day weekends need a longer lookback
     # 最新1日の金価格（円建て）を算出
-    xau_usd_price = gold_usd_tkr.history(period="1d")['Close'].iloc[-1]
-    usd_jpy_price = usd_jpy_tkr.history(period="1d")['Close'].iloc[-1]
+    xau_usd_price = _last_valid_close(gold_usd_tkr, period="7d")
+    usd_jpy_price = _last_valid_close(usd_jpy_tkr, period="7d")
     gold_price = float(xau_usd_price) * float(usd_jpy_price)
 
     # 既存のCSVを読み込み

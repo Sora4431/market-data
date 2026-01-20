@@ -22,6 +22,43 @@ def _compute_changes(df, price_col, change_col, pct_col):
     df[change_col] = change.fillna(0).round(2)
     df[pct_col] = pct.fillna(0).round(2)
 
+def _refresh_sp500_only(csv_path: str = 'market_data.csv'):
+    """Re-fetch S&P 500 closes for the CSV date range and recompute its changes."""
+    try:
+        df = pd.read_csv(csv_path)
+    except FileNotFoundError:
+        print("CSV not found; nothing to refresh.")
+        return
+
+    if df.empty or 'date' not in df.columns:
+        print("CSV is empty or missing date column; nothing to refresh.")
+        return
+
+    date_series = pd.to_datetime(df['date'])
+    start_date = date_series.min().date()
+    end_date = date_series.max().date() + timedelta(days=1)
+
+    sp500 = yf.Ticker("^GSPC")
+    hist = sp500.history(start=str(start_date), end=str(end_date))
+    idx = hist.index
+    try:
+        idx = idx.tz_localize(None)
+    except Exception:
+        pass
+    hist['date'] = pd.to_datetime(idx).date
+    hist = hist.groupby('date')['Close'].last().round(2).rename('sp500').reset_index()
+    hist['date'] = pd.to_datetime(hist['date']).dt.strftime('%Y-%m-%d')
+
+    df = df.merge(hist, on='date', how='left', suffixes=(None, '_new'))
+    updated_rows = df['sp500_new'].notna().sum()
+    df['sp500'] = df['sp500_new'].combine_first(df['sp500'])
+    df = df.drop(columns=['sp500_new'])
+
+    _compute_changes(df, 'sp500', 'sp500_change', 'sp500_pct')
+    df.to_csv(csv_path, index=False)
+
+    print(f"Refreshed S&P 500 for {updated_rows} dates between {start_date} and {end_date - timedelta(days=1)}")
+
 def fetch_market_data(days: int = 1, refresh: bool = False):
     """日経平均、S&P 500、金価格を取得してCSVに保存
 
@@ -211,7 +248,11 @@ if __name__ == "__main__":
     parser.add_argument('--days', type=int, default=1, help='Number of recent days to fetch (default: 1)')
     parser.add_argument('--refresh', action='store_true', help='Overwrite CSV with last N days instead of appending')
     parser.add_argument('--ffill', action='store_true', help='Forward-fill missing non-trading days to keep continuous dates')
+    parser.add_argument('--fix-sp500', action='store_true', help='Re-fetch S&P 500 for existing CSV date range and overwrite that column')
     args = parser.parse_args()
     # pass ffill flag via function attribute to avoid changing signature significantly
     fetch_market_data._ffill = args.ffill
-    fetch_market_data(days=args.days, refresh=args.refresh)
+    if args.fix_sp500:
+        _refresh_sp500_only()
+    else:
+        fetch_market_data(days=args.days, refresh=args.refresh)

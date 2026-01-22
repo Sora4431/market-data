@@ -8,12 +8,13 @@ def main():
     df = df.sort_values('date')
 
     # Use last 14 entries just in case CSV has more
-    df = df.tail(14)
+    df = df.tail(14).reset_index(drop=True)
 
     # Create 3 separate charts
     charts = [
         {
             'col': 'nikkei_225',
+            'change_col': 'nikkei_change',
             'title': 'Nikkei 225 (Last 14 Days)',
             'ylabel': 'Price (JPY)',
             'color': '#1f77b4',
@@ -21,6 +22,7 @@ def main():
         },
         {
             'col': 'sp500',
+            'change_col': 'sp500_change',
             'title': 'S&P 500 (Last 14 Days)',
             'ylabel': 'Index',
             'color': '#ff7f0e',
@@ -28,6 +30,7 @@ def main():
         },
         {
             'col': 'gold_jpy',
+            'change_col': 'gold_change',
             'title': 'Gold Price in JPY (Last 14 Days)',
             'ylabel': 'Price (JPY per Troy Ounce)',
             'color': '#2ca02c',
@@ -37,18 +40,37 @@ def main():
 
     for chart in charts:
         col = chart['col']
-        if col not in df.columns:
+        change_col = chart['change_col']
+        if col not in df.columns or change_col not in df.columns:
             continue
 
-        plt.figure(figsize=(10, 5))
-        plt.plot(df['date'], df[col], color=chart['color'], linewidth=2, marker='o', markersize=4)
-        plt.title(chart['title'], fontsize=14, fontweight='bold')
-        plt.xlabel('Date', fontsize=12)
-        plt.ylabel(chart['ylabel'], fontsize=12)
-        plt.grid(True, alpha=0.3)
+        # Identify holidays (days with zero change, excluding first day)
+        df['is_holiday'] = (df[change_col] == 0) & (df.index > 0)
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Highlight weekends (Saturday/Sunday) with light gray background
+        for i, row in df.iterrows():
+            weekday = row['date'].weekday()
+            # 5=Saturday, 6=Sunday or holidays with zero change
+            if weekday in [5, 6] or row['is_holiday']:
+                ax.axvspan(row['date'] - pd.Timedelta(hours=12),
+                          row['date'] + pd.Timedelta(hours=12),
+                          color='lightgray', alpha=0.3, zorder=0)
+
+        # Plot only working days (no line or points for holidays)
+        working_days = df[~df['is_holiday']]
+
+        ax.plot(working_days['date'], working_days[col],
+                color=chart['color'], linewidth=2, marker='o', markersize=4)
+
+        ax.set_title(chart['title'], fontsize=14, fontweight='bold')
+        ax.set_xlabel('Date', fontsize=12)
+        ax.set_ylabel(chart['ylabel'], fontsize=12)
+        ax.grid(True, alpha=0.3)
         plt.xticks(rotation=45)
         plt.tight_layout()
-        
+
         # Save to SVG for embedding in GitHub README
         plt.savefig(chart['filename'], format='svg', bbox_inches='tight')
         plt.close()

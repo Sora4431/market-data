@@ -1,11 +1,17 @@
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import argparse
-from datetime import timedelta
 
 def _round_series(s):
     return s.round(2)
+
+def _normalize_timezone(idx):
+    """Remove timezone info from DatetimeIndex if present."""
+    try:
+        return idx.tz_localize(None)
+    except Exception:
+        return idx
 
 def _last_valid_close(tkr: yf.Ticker, period: str = "7d") -> float:
     """Return the most recent non-null Close from given period."""
@@ -40,12 +46,8 @@ def _refresh_sp500_only(csv_path: str = 'market_data.csv'):
 
     sp500 = yf.Ticker("^GSPC")
     hist = sp500.history(start=str(start_date), end=str(end_date))
-    idx = hist.index
-    try:
-        idx = idx.tz_localize(None)
-    except Exception:
-        pass
-    hist['date'] = pd.to_datetime(idx).date
+    hist.index = _normalize_timezone(hist.index)
+    hist['date'] = pd.to_datetime(hist.index).date
     hist = hist.groupby('date')['Close'].last().round(2).rename('sp500').reset_index()
     hist['date'] = pd.to_datetime(hist['date']).dt.strftime('%Y-%m-%d')
 
@@ -76,12 +78,8 @@ def fetch_market_data(days: int = 1, refresh: bool = False):
         # 直近 days 日の終値を取得（各市場で日付単位に集約）
         def _prepare_hist(tkr: yf.Ticker, colname: str):
             h = tkr.history(period=f"{days}d")[['Close']]
-            idx = h.index
-            try:
-                idx = idx.tz_localize(None)
-            except Exception:
-                pass
-            h['date'] = pd.to_datetime(idx).date
+            h.index = _normalize_timezone(h.index)
+            h['date'] = pd.to_datetime(h.index).date
             h = h.groupby('date')['Close'].last().to_frame().rename(columns={'Close': colname})
             return h
 
@@ -165,13 +163,9 @@ def fetch_market_data(days: int = 1, refresh: bool = False):
             try:
                 min_date = pd.to_datetime(df['date']).min().date()
                 max_date = pd.to_datetime(df['date']).max().date()
-                usd_jpy = yf.Ticker("USDJPY=X").history(start=str(min_date), end=str(max_date + pd.Timedelta(days=1)))
-                idx = usd_jpy.index
-                try:
-                    idx = idx.tz_localize(None)
-                except Exception:
-                    pass
-                usd_jpy['date'] = pd.to_datetime(idx).date
+                usd_jpy = usd_jpy_tkr.history(start=str(min_date), end=str(max_date + pd.Timedelta(days=1)))
+                usd_jpy.index = _normalize_timezone(usd_jpy.index)
+                usd_jpy['date'] = pd.to_datetime(usd_jpy.index).date
                 usd_jpy = usd_jpy.groupby('date')['Close'].last().to_frame().rename(columns={'Close': 'usd_jpy'})
                 map_df = usd_jpy.reset_index()
                 df['date_obj'] = pd.to_datetime(df['date']).dt.date
@@ -184,36 +178,14 @@ def fetch_market_data(days: int = 1, refresh: bool = False):
             except Exception:
                 df = df.rename(columns={'gold_usd': 'gold_jpy'})
 
-        if 'gold_usd' in df.columns and 'gold_jpy' not in df.columns:
-            try:
-                min_date = pd.to_datetime(df['date']).min().date()
-                max_date = pd.to_datetime(df['date']).max().date()
-                usd_jpy = usd_jpy_tkr.history(start=str(min_date), end=str(max_date + pd.Timedelta(days=1)))
-                idx = usd_jpy.index
-                try:
-                    idx = idx.tz_localize(None)
-                except Exception:
-                    pass
-                usd_jpy['date'] = pd.to_datetime(idx).date
-                usd_jpy = usd_jpy.groupby('date')['Close'].last().to_frame().rename(columns={'Close': 'usd_jpy'})
-                map_df = usd_jpy.reset_index()
-                df['date_obj'] = pd.to_datetime(df['date']).dt.date
-                df = df.merge(map_df, left_on='date_obj', right_on='date', how='left', suffixes=(None, '_fx'))
-                df['gold_jpy'] = (df['gold_usd'] * df['usd_jpy']).round(2)
-                df = df.drop(columns=['date_obj', 'date_fx', 'usd_jpy'])
-                _compute_changes(df, 'gold_jpy', 'gold_change', 'gold_pct')
-                df = df.drop(columns=['gold_usd'])
-            except Exception:
-                df = df.rename(columns={'gold_usd': 'gold_jpy'})
-
         if len(df) > 0:
             prev = df.iloc[-1]
-            nikkei_change = float(nikkei_price) - float(prev['nikkei_225'])
-            sp500_change = float(sp500_price) - float(prev['sp500'])
-            gold_change = float(gold_price) - float(prev['gold_jpy'])
-            nikkei_pct = (nikkei_change / float(prev['nikkei_225'])) * 100 if float(prev['nikkei_225']) != 0 else 0
-            sp500_pct = (sp500_change / float(prev['sp500'])) * 100 if float(prev['sp500']) != 0 else 0
-            gold_pct = (gold_change / float(prev['gold_jpy'])) * 100 if float(prev['gold_jpy']) != 0 else 0
+            nikkei_change = nikkei_price - prev['nikkei_225']
+            sp500_change = sp500_price - prev['sp500']
+            gold_change = gold_price - prev['gold_jpy']
+            nikkei_pct = (nikkei_change / prev['nikkei_225']) * 100 if prev['nikkei_225'] != 0 else 0
+            sp500_pct = (sp500_change / prev['sp500']) * 100 if prev['sp500'] != 0 else 0
+            gold_pct = (gold_change / prev['gold_jpy']) * 100 if prev['gold_jpy'] != 0 else 0
         else:
             nikkei_change = sp500_change = gold_change = 0.0
             nikkei_pct = sp500_pct = gold_pct = 0.0
@@ -224,34 +196,31 @@ def fetch_market_data(days: int = 1, refresh: bool = False):
 
     new_data = pd.DataFrame({
         'date': [today],
-        'nikkei_225': [round(float(nikkei_price), 2)],
-        'sp500': [round(float(sp500_price), 2)],
-        'gold_jpy': [round(float(gold_price), 2)],
-        'nikkei_change': [round(float(nikkei_change), 2)],
-        'nikkei_pct': [round(float(nikkei_pct), 2)],
-        'sp500_change': [round(float(sp500_change), 2)],
-        'sp500_pct': [round(float(sp500_pct), 2)],
-        'gold_change': [round(float(gold_change), 2)],
-        'gold_pct': [round(float(gold_pct), 2)]
+        'nikkei_225': [round(nikkei_price, 2)],
+        'sp500': [round(sp500_price, 2)],
+        'gold_jpy': [round(gold_price, 2)],
+        'nikkei_change': [round(nikkei_change, 2)],
+        'nikkei_pct': [round(nikkei_pct, 2)],
+        'sp500_change': [round(sp500_change, 2)],
+        'sp500_pct': [round(sp500_pct, 2)],
+        'gold_change': [round(gold_change, 2)],
+        'gold_pct': [round(gold_pct, 2)]
     })
 
     df = pd.concat([df, new_data], ignore_index=True)
     df.to_csv('market_data.csv', index=False)
 
     print(f"Updated: {today}")
-    print(f"Nikkei 225: ¥{float(nikkei_price):,.2f} ({nikkei_change:+.2f}, {nikkei_pct:+.2f}%)")
-    print(f"S&P 500: ${float(sp500_price):,.2f} ({sp500_change:+.2f}, {sp500_pct:+.2f}%)")
-    print(f"Gold: ¥{float(gold_price):,.2f}/oz ({gold_change:+.2f}, {gold_pct:+.2f}%)")
+    print(f"Nikkei 225: ¥{nikkei_price:,.2f} ({nikkei_change:+.2f}, {nikkei_pct:+.2f}%)")
+    print(f"S&P 500: ${sp500_price:,.2f} ({sp500_change:+.2f}, {sp500_pct:+.2f}%)")
+    print(f"Gold: ¥{gold_price:,.2f}/oz ({gold_change:+.2f}, {gold_pct:+.2f}%)")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch market data for recent days")
     parser.add_argument('--days', type=int, default=1, help='Number of recent days to fetch (default: 1)')
     parser.add_argument('--refresh', action='store_true', help='Overwrite CSV with last N days instead of appending')
-    parser.add_argument('--ffill', action='store_true', help='Forward-fill missing non-trading days to keep continuous dates')
     parser.add_argument('--fix-sp500', action='store_true', help='Re-fetch S&P 500 for existing CSV date range and overwrite that column')
     args = parser.parse_args()
-    # pass ffill flag via function attribute to avoid changing signature significantly
-    fetch_market_data._ffill = args.ffill
     if args.fix_sp500:
         _refresh_sp500_only()
     else:

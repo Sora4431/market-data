@@ -2,8 +2,8 @@ name: Update Market Data
 
 on:
   schedule:
-    # 毎朝8:00 JST (23:00 UTC前日) に実行
-    - cron: '0 23 * * *'
+    # 毎朝9:00 JST (00:00 UTC) に実行（全市場の終値確定後）
+    - cron: '0 0 * * *'
   workflow_dispatch: # 手動実行も可能
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -25,7 +25,7 @@ jobs:
 
       - name: Fetch market data
         run: |
-          python fetch_market_data.py
+          python fetch_market_data.py --days 14
 
       - name: Generate charts
         run: |
@@ -35,6 +35,5 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add market_data.csv chart_*.svg
-          git diff --staged --quiet || git commit -m "📊 Update market data and charts"
-          git push
+          git add market_data.csv chart_nikkei.svg chart_sp500.svg chart_gold.svg
+          git diff --quiet && git diff --staged --quiet || (git commit -m "📊 Update market data and charts" && git push)

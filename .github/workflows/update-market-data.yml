@@ -2,8 +2,8 @@ name: Update Market Data
 
 on:
   schedule:
-    # 毎朝9:00 JST (00:00 UTC) に実行（全市場の終値確定後）
-    - cron: '0 0 * * *'
+    # 毎日13:00 JST (04:00 UTC) に実行（テスト用）
+    - cron: '0 4 * * *'
   workflow_dispatch: # 手動実行も可能
 
 jobs:

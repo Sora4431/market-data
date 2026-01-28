@@ -44,22 +44,22 @@ def main():
         if col not in df.columns or change_col not in df.columns:
             continue
 
-        # Identify holidays (days with zero change, excluding first day)
-        df['is_holiday'] = (df[change_col] == 0) & (df.index > 0)
+        # Identify holidays: weekends only (don't use zero change as holiday indicator)
+        df['is_weekend'] = df['date'].dt.weekday.isin([5, 6])
 
         fig, ax = plt.subplots(figsize=(10, 5))
 
         # Highlight weekends (Saturday/Sunday) with light gray background
         for i, row in df.iterrows():
             weekday = row['date'].weekday()
-            # 5=Saturday, 6=Sunday or holidays with zero change
-            if weekday in [5, 6] or row['is_holiday']:
+            # 5=Saturday, 6=Sunday only
+            if weekday in [5, 6]:
                 ax.axvspan(row['date'] - pd.Timedelta(hours=12),
                           row['date'] + pd.Timedelta(hours=12),
                           color='lightgray', alpha=0.3, zorder=0)
 
-        # Plot only working days (no line or points for holidays)
-        working_days = df[~df['is_holiday']]
+        # Plot only working days (exclude weekends)
+        working_days = df[~df['is_weekend']]
 
         ax.plot(working_days['date'], working_days[col],
                 color=chart['color'], linewidth=2, marker='o', markersize=4)

@@ -2,9 +2,10 @@ name: Daily Market Update
 
 on:
   schedule:
-    # 毎朝9:00 JST (00:00 UTC) に実行
-    - cron: '0 0 * * *'
-  workflow_dispatch: # 手動実行も可能
+    # Run at 22:00 UTC on weekdays (Mon-Fri)
+    # = 5:00 PM EST (winter) / 6:00 PM EDT (summer) — after US market closes at 4 PM ET
+    - cron: '0 22 * * 1-5'
+  workflow_dispatch: # allow manual runs
 
 permissions:
   contents: write
@@ -23,20 +24,18 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Fetch market data
-        run: |
-          python fetch_market_data.py --days 14
+        run: python fetch_market_data.py --days 14
 
       - name: Generate charts
-        run: |
-          python plot_market_chart.py
+        run: python plot_market_chart.py
 
       - name: Commit and push if changed
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add market_data.csv chart_nikkei.svg chart_sp500.svg chart_gold.svg
-          git diff --quiet && git diff --staged --quiet || (git commit -m "📊 Update market data and charts" && git push)
+          git add market_data.csv chart_sp500.svg chart_wti.svg chart_us10y.svg
+          git diff --quiet && git diff --staged --quiet || \
+            (git commit -m "📊 Update market data and charts" && git push)

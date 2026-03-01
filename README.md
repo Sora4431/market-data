@@ -1,3 +1,4 @@
+[![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=<sora4431>)](https://github.com/anuraghazra/github-readme-stats)
 # 📊 Market Data Dashboard
 
 S&P 500、WTI原油、米国10年債券金利の市場データを自動取得・可視化します。
